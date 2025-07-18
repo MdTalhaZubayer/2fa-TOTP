@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TOTP Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 40px;
+      background-color: #f4f4f4;
+    }
+    input {
+      padding: 10px;
+      width: 300px;
+      font-size: 16px;
+      margin-top: 20px;
+    }
+    .code {
+      font-size: 48px;
+      margin-top: 30px;
+      font-weight: bold;
+      color: #2c3e50;
+    }
+    .timer {
+      font-size: 18px;
+      color: #888;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>TOTP Generator</h1>
+  <p>Enter your Base32 secret key:</p>
+  <input type="text" id="secret" placeholder="e.g. JBSWY3DPEHPK3PXP" />
+
+  <div class="code" id="otp">------</div>
+  <div class="timer" id="countdown">Next code in: 30s</div>
+
+  <script>
+    // Minimal Base32 decoding
+    function base32ToHex(base32) {
+      const base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+      let bits = "";
+      let hex = "";
+
+      base32 = base32.replace(/=+$/, '').toUpperCase();
+      for (let i = 0; i < base32.length; i++) {
+        const val = base32chars.indexOf(base32.charAt(i));
+        bits += val.toString(2).padStart(5, '0');
+      }
+
+      for (let i = 0; i + 4 <= bits.length; i += 4) {
+        hex += parseInt(bits.substr(i, 4), 2).toString(16);
+      }
+
+      return hex;
+    }
+
+    function generateOTP(secret) {
+      const epoch = Math.floor(new Date().getTime() / 1000);
+      const time = Math.floor(epoch / 30).toString(16).padStart(16, '0');
+      const key = base32ToHex(secret);
+
+      const cryptoKey = new Uint8Array(key.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+      const timeBuffer = new Uint8Array(time.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+
+      return window.crypto.subtle.importKey(
+        "raw", cryptoKey, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]
+      ).then(key =>
+        window.crypto.subtle.sign("HMAC", key, timeBuffer)
+      ).then(sig => {
+        const hmac = new Uint8Array(sig);
+        const offset = hmac[hmac.length - 1] & 0xf;
+        const binary =
+          ((hmac[offset] & 0x7f) << 24) |
+          ((hmac[offset + 1] & 0xff) << 16) |
+          ((hmac[offset + 2] & 0xff) << 8) |
+          (hmac[offset + 3] & 0xff);
+
+        const otp = (binary % 1000000).toString().padStart(6, '0');
+        return otp;
+      });
+    }
+
+    async function updateOTP() {
+      const secret = document.getElementById('secret').value.trim().replace(/ /g, '');
+      const otpEl = document.getElementById('otp');
+      const countdownEl = document.getElementById('countdown');
+
+      if (secret.length < 16) {
+        otpEl.textContent = "------";
+        countdownEl.textContent = "Enter a valid secret";
+        return;
+      }
+
+      try {
+        const otp = await generateOTP(secret);
+        otpEl.textContent = otp;
+      } catch (e) {
+        otpEl.textContent = "Error";
+      }
+
+      const secs = 30 - Math.floor((Date.now() / 1000) % 30);
+      countdownEl.textContent = `Next code in: ${secs}s`;
+    }
+
+    setInterval(updateOTP, 1000);
+  </script>
+
+</body>
+</html>
