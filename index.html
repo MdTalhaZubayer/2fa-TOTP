@@ -16,8 +16,8 @@
             --card-bg: rgba(12, 18, 15, 0.45);
             --accent: #3ebd83;
             --accent-soft: rgba(62, 189, 131, 0.08);
-            --text-high: rgba(224, 232, 228, 0.95);
-            --text-dim: rgba(160, 180, 170, 0.75);
+            --text-high: rgba(224, 232, 228, 0.85);
+            --text-dim: #5c6b63;
             --border: rgba(255, 255, 255, 0.05);
             --input-idle: rgba(255, 255, 255, 0.03);
             --input-focus: rgba(255, 255, 255, 0.08);
@@ -30,8 +30,8 @@
             --card-bg: rgba(255, 255, 255, 0.35);
             --accent: #008a52;
             --accent-soft: rgba(0, 138, 82, 0.05);
-            --text-high: rgba(18, 26, 22, 0.95);
-            --text-dim: rgba(60, 80, 70, 0.8);
+            --text-high: rgba(18, 26, 22, 0.75);
+            --text-dim: #7a8c82;
             --border: rgba(0, 0, 0, 0.04);
             --input-idle: rgba(0, 0, 0, 0.035);
             --input-focus: rgba(0, 0, 0, 0.07);
@@ -123,15 +123,11 @@
             z-index: 10;
         }
 
-        /* Responsive Mobile Adjustments */
+        /* --- MOBILE RESPONSIVENESS --- */
         @media (max-width: 480px) {
             .auth-card {
                 padding: 1.5rem;
                 border-radius: 20px;
-            }
-
-            .header {
-                margin-bottom: 1.5rem;
             }
 
             .code {
@@ -249,7 +245,7 @@
             border: 1px solid var(--border);
             border-radius: 10px;
             padding: 12px 16px;
-            color: var(--text-high);
+            color: var(--text-dim);
             font-size: 0.85rem;
             outline: none;
             font-family: 'JetBrains Mono', monospace;
@@ -263,6 +259,7 @@
         input:focus {
             border-color: var(--accent);
             background: var(--input-focus);
+            color: var(--text-high);
         }
 
         .grid {
@@ -289,7 +286,6 @@
 </head>
 
 <body data-theme="dark">
-
     <div class="mesh-gradient">
         <div class="blob" id="blob1" style="top: -10%; left: -10%;"></div>
         <div class="blob blob-2" id="blob2" style="bottom: -5%; right: -5%;"></div>
@@ -316,8 +312,8 @@
             <div class="input-group">
                 <label>Master Secret</label>
                 <div style="position: relative;">
-                    <input type="text" id="secret" placeholder="Enter Base32 Secret" oninput="updateOTP()"
-                        spellcheck="false">
+                    <input type="text" id="secret" value="" oninput="updateOTP()" spellcheck="false"
+                        placeholder="Enter Base32 Key">
                     <span
                         style="position:absolute; right:15px; top:50%; transform:translateY(-50%); cursor:pointer; color:var(--accent); opacity:0.4"
                         onclick="toggleSecret()" id="eye-icon">
@@ -372,7 +368,6 @@
             if (!/^[A-Z2-7]*$/.test(clean)) return null;
             for (let i = 0; i < clean.length; i++) {
                 const val = base32chars.indexOf(clean.charAt(i));
-                if (val === -1) return null;
                 bits += val.toString(2).padStart(5, '0');
             }
             for (let i = 0; i + 4 <= bits.length; i += 4) {
@@ -389,7 +384,7 @@
             const bar = document.getElementById('progress-bar');
             const label = document.getElementById('timer-label');
 
-            // Sanitize number inputs
+            // Sanitize inputs
             if (digitsInput.value !== "") {
                 if (parseInt(digitsInput.value) > 8) digitsInput.value = 8;
                 if (parseInt(digitsInput.value) < 6) digitsInput.value = 6;
@@ -403,7 +398,7 @@
             const digits = parseInt(digitsInput.value) || 6;
             const period = parseInt(periodInput.value) || 30;
 
-            // --- STOP LOGIC: If secret is empty or clearly too short ---
+            // Logic Gate: Only run if secret is valid
             if (secret.length === 0) {
                 otpEl.textContent = "------";
                 label.innerText = "AWAITING SECRET";
@@ -426,7 +421,6 @@
                 return;
             }
 
-            // --- START LOGIC: If secret is valid ---
             const epoch = Date.now() / 1000;
             const remaining = Math.ceil(period - (epoch % period));
             bar.style.width = ((remaining / period) * 100) + "%";
@@ -450,7 +444,9 @@
 
         function copyCode() {
             const otpText = document.getElementById('otp').innerText;
-            if (otpText.includes("-") || otpText === "INVALID" || otpText === "SHORT" || otpText === "ERROR") return;
+            const statusLabels = ["------", "INVALID", "SHORT", "ERROR", "AWAITING SECRET"];
+            if (statusLabels.some(status => otpText.includes(status))) return;
+
             navigator.clipboard.writeText(otpText);
             document.getElementById('copy-target').classList.add('copied');
             setTimeout(() => document.getElementById('copy-target').classList.remove('copied'), 2000);
