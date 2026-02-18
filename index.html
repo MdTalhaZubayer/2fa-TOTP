@@ -1,114 +1,430 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>TOTP Generator</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 40px;
-      background-color: #f4f4f4;
-    }
-    input {
-      padding: 10px;
-      width: 300px;
-      font-size: 16px;
-      margin-top: 20px;
-    }
-    .code {
-      font-size: 48px;
-      margin-top: 30px;
-      font-weight: bold;
-      color: #2c3e50;
-    }
-    .timer {
-      font-size: 18px;
-      color: #888;
-      margin-top: 10px;
-    }
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Secure Vault | TOTP Generator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@200;400;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-base: #020403;
+            --mesh-1: #081a13;
+            --mesh-2: #030806;
+            --card-bg: rgba(12, 18, 15, 0.45);
+            --accent: #3ebd83;
+            --accent-soft: rgba(62, 189, 131, 0.08);
+            --text-high: rgba(224, 232, 228, 0.85);
+            /* Subtle Dark */
+            --text-dim: #5c6b63;
+            --border: rgba(255, 255, 255, 0.05);
+            --input-idle: rgba(255, 255, 255, 0.03);
+            --input-focus: rgba(255, 255, 255, 0.08);
+        }
+
+        [data-theme="light"] {
+            --bg-base: #f0f5f2;
+            --mesh-1: #d9ede4;
+            --mesh-2: #e8f5ee;
+            --card-bg: rgba(255, 255, 255, 0.35);
+            --accent: #008a52;
+            --accent-soft: rgba(0, 138, 82, 0.05);
+            --text-high: rgba(18, 26, 22, 0.75);
+            /* Subtle Light */
+            --text-dim: #7a8c82;
+            --border: rgba(0, 0, 0, 0.04);
+            --input-idle: rgba(0, 0, 0, 0.035);
+            --input-focus: rgba(0, 0, 0, 0.07);
+        }
+
+        * {
+            box-sizing: border-box;
+            transition: background 0.5s ease, color 0.5s ease, border 0.5s ease, transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background-color: var(--bg-base);
+            color: var(--text-high);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.045;
+            pointer-events: none;
+            z-index: 999;
+            mix-blend-mode: overlay;
+        }
+
+        .mesh-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: var(--bg-base);
+        }
+
+        .blob {
+            position: absolute;
+            width: 100vw;
+            height: 100vw;
+            background: var(--mesh-1);
+            filter: blur(120px);
+            border-radius: 50%;
+            opacity: 0.5;
+            animation: flow 25s infinite ease-in-out;
+            pointer-events: none;
+        }
+
+        .blob-2 {
+            width: 80vw;
+            height: 80vw;
+            background: var(--accent);
+            opacity: 0.08;
+            animation: flow 20s infinite ease-in-out reverse;
+        }
+
+        @keyframes flow {
+
+            0%,
+            100% {
+                transform: translate(-10%, -10%) scale(1);
+            }
+
+            50% {
+                transform: translate(8%, 8%) scale(1.05);
+            }
+        }
+
+        .auth-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(55px) saturate(130%);
+            -webkit-backdrop-filter: blur(55px) saturate(130%);
+            padding: 2.5rem;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            width: 100%;
+            max-width: 440px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 0.7rem;
+            letter-spacing: 0.5em;
+            text-transform: uppercase;
+            margin: 0;
+            color: var(--accent);
+            font-weight: 700;
+            opacity: 0.7;
+        }
+
+        .icon-btn {
+            background: var(--accent-soft);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .token-area {
+            background: var(--input-idle);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            min-height: 140px;
+            margin-bottom: 2rem;
+            text-align: center;
+            position: relative;
+            cursor: pointer;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .progress-box {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            background: var(--accent-soft);
+            width: 100%;
+            z-index: 1;
+            transition: width 1s linear;
+        }
+
+        .content-layer {
+            position: relative;
+            z-index: 2;
+        }
+
+        /* --- SUBTLE OTP TYPOGRAPHY --- */
+        .code {
+            font-size: 3.2rem;
+            font-weight: 200;
+            /* Ultra-thin and clean */
+            letter-spacing: -1px;
+            color: var(--text-high);
+            display: block;
+            width: 100%;
+        }
+
+        .timer-label {
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: var(--accent);
+            margin-bottom: 8px;
+            font-weight: 700;
+            opacity: 0.6;
+        }
+
+        .controls {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        label {
+            font-size: 0.55rem;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        input {
+            width: 100%;
+            background: var(--input-idle);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 16px;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            outline: none;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        input:hover {
+            background: var(--input-focus);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        input:focus {
+            border-color: var(--accent);
+            background: var(--input-focus);
+            color: var(--text-high);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.2rem;
+        }
+
+        .copy-toast {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 9px;
+            color: var(--accent);
+            opacity: 0;
+            font-weight: 800;
+            transition: opacity 0.3s ease;
+        }
+
+        .copied .copy-toast {
+            opacity: 1;
+        }
+    </style>
 </head>
-<body>
 
-  <h1>TOTP Generator</h1>
-  <p>Enter your Base32 secret key:</p>
-  <input type="text" id="secret" placeholder="e.g. JBSWY3DPEHPK3PXP" />
+<body data-theme="dark">
 
-  <div class="code" id="otp">------</div>
-  <div class="timer" id="countdown">Next code in: 30s</div>
+    <div class="mesh-gradient">
+        <div class="blob" id="blob1" style="top: -10%; left: -10%;"></div>
+        <div class="blob blob-2" id="blob2" style="bottom: -5%; right: -5%;"></div>
+    </div>
 
-  <script>
-    // Minimal Base32 decoding
-    function base32ToHex(base32) {
-      const base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-      let bits = "";
-      let hex = "";
+    <div class="auth-card">
+        <div class="header">
+            <h1>Secure Vault</h1>
+            <button class="icon-btn" onclick="toggleTheme()" id="theme-icon">
+                <i class="fa-solid fa-moon"></i>
+            </button>
+        </div>
 
-      base32 = base32.replace(/=+$/, '').toUpperCase();
-      for (let i = 0; i < base32.length; i++) {
-        const val = base32chars.indexOf(base32.charAt(i));
-        bits += val.toString(2).padStart(5, '0');
-      }
+        <div class="token-area" id="copy-target" onclick="copyCode()">
+            <div class="progress-box" id="progress-bar"></div>
+            <span class="copy-toast">COPIED</span>
+            <div class="content-layer">
+                <div class="timer-label" id="timer-label">VERIFYING...</div>
+                <div class="code" id="otp">------</div>
+            </div>
+        </div>
 
-      for (let i = 0; i + 4 <= bits.length; i += 4) {
-        hex += parseInt(bits.substr(i, 4), 2).toString(16);
-      }
+        <div class="controls">
+            <div class="input-group">
+                <label>Master Secret</label>
+                <div style="position: relative;">
+                    <input type="text" id="secret" value="JBSWY3DPEHPK3PXP" oninput="updateOTP()" spellcheck="false">
+                    <span
+                        style="position:absolute; right:15px; top:50%; transform:translateY(-50%); cursor:pointer; color:var(--accent); opacity:0.4"
+                        onclick="toggleSecret()" id="eye-icon">
+                        <i class="fa-solid fa-eye"></i>
+                    </span>
+                </div>
+            </div>
 
-      return hex;
-    }
+            <div class="grid">
+                <div class="input-group">
+                    <label>Length</label>
+                    <input type="number" id="digits" value="6" min="6" max="8" oninput="updateOTP()">
+                </div>
+                <div class="input-group">
+                    <label>Period</label>
+                    <input type="number" id="period" value="30" min="10" max="120" oninput="updateOTP()">
+                </div>
+            </div>
+        </div>
+    </div>
 
-    function generateOTP(secret) {
-      const epoch = Math.floor(new Date().getTime() / 1000);
-      const time = Math.floor(epoch / 30).toString(16).padStart(16, '0');
-      const key = base32ToHex(secret);
+    <script>
+        document.addEventListener('mousemove', (e) => {
+            const x = (e.clientX / window.innerWidth) - 0.5;
+            const y = (e.clientY / window.innerHeight) - 0.5;
+            const b1 = document.getElementById('blob1');
+            const b2 = document.getElementById('blob2');
+            b1.style.transform = `translate(${x * 40}px, ${y * 40}px)`;
+            b2.style.transform = `translate(${x * -50}px, ${y * -50}px)`;
+        });
 
-      const cryptoKey = new Uint8Array(key.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-      const timeBuffer = new Uint8Array(time.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+        function toggleTheme() {
+            const body = document.body;
+            const icon = document.getElementById('theme-icon');
+            const isDark = body.getAttribute('data-theme') === 'dark';
+            body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            icon.innerHTML = isDark ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+        }
 
-      return window.crypto.subtle.importKey(
-        "raw", cryptoKey, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]
-      ).then(key =>
-        window.crypto.subtle.sign("HMAC", key, timeBuffer)
-      ).then(sig => {
-        const hmac = new Uint8Array(sig);
-        const offset = hmac[hmac.length - 1] & 0xf;
-        const binary =
-          ((hmac[offset] & 0x7f) << 24) |
-          ((hmac[offset + 1] & 0xff) << 16) |
-          ((hmac[offset + 2] & 0xff) << 8) |
-          (hmac[offset + 3] & 0xff);
+        function toggleSecret() {
+            const input = document.getElementById('secret');
+            const icon = document.getElementById('eye-icon');
+            const isPass = input.type === 'password';
+            input.type = isPass ? 'text' : 'password';
+            icon.innerHTML = isPass ? '<i class="fa-solid fa-eye"></i>' : '<i class="fa-solid fa-eye-slash"></i>';
+        }
 
-        const otp = (binary % 1000000).toString().padStart(6, '0');
-        return otp;
-      });
-    }
+        function base32ToHex(base32) {
+            const base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+            let bits = ""; let hex = "";
+            const clean = base32.replace(/=+$/, '').toUpperCase().replace(/\s/g, '');
+            if (!/^[A-Z2-7]*$/.test(clean)) return null;
+            for (let i = 0; i < clean.length; i++) {
+                const val = base32chars.indexOf(clean.charAt(i));
+                bits += val.toString(2).padStart(5, '0');
+            }
+            for (let i = 0; i + 4 <= bits.length; i += 4) {
+                hex += parseInt(bits.substr(i, 4), 2).toString(16);
+            }
+            return hex;
+        }
 
-    async function updateOTP() {
-      const secret = document.getElementById('secret').value.trim().replace(/ /g, '');
-      const otpEl = document.getElementById('otp');
-      const countdownEl = document.getElementById('countdown');
+        async function updateOTP() {
+            const secretInput = document.getElementById('secret');
+            const digitsInput = document.getElementById('digits');
+            const periodInput = document.getElementById('period');
 
-      if (secret.length < 16) {
-        otpEl.textContent = "------";
-        countdownEl.textContent = "Enter a valid secret";
-        return;
-      }
+            if (digitsInput.value !== "") {
+                if (parseInt(digitsInput.value) > 8) digitsInput.value = 8;
+                if (parseInt(digitsInput.value) < 6) digitsInput.value = 6;
+            }
+            if (periodInput.value !== "") {
+                if (parseInt(periodInput.value) > 120) periodInput.value = 120;
+                if (parseInt(periodInput.value) < 10) periodInput.value = 10;
+            }
 
-      try {
-        const otp = await generateOTP(secret);
-        otpEl.textContent = otp;
-      } catch (e) {
-        otpEl.textContent = "Error";
-      }
+            const secret = secretInput.value;
+            const digits = parseInt(digitsInput.value) || 6;
+            const period = parseInt(periodInput.value) || 30;
 
-      const secs = 30 - Math.floor((Date.now() / 1000) % 30);
-      countdownEl.textContent = `Next code in: ${secs}s`;
-    }
+            const otpEl = document.getElementById('otp');
+            const bar = document.getElementById('progress-bar');
+            const label = document.getElementById('timer-label');
 
-    setInterval(updateOTP, 1000);
-  </script>
+            const epoch = Date.now() / 1000;
+            const remaining = Math.ceil(period - (epoch % period));
+            bar.style.width = ((remaining / period) * 100) + "%";
+            label.innerText = `${remaining}s REMAINING`;
 
+            try {
+                if (secret.length < 16 && secret.length > 0) {
+                    otpEl.textContent = "SHORT";
+                    return;
+                }
+                const keyHex = base32ToHex(secret);
+                if (!keyHex && secret.length > 0) {
+                    otpEl.textContent = "INVALID";
+                    return;
+                }
+                if (secret.length === 0) {
+                    otpEl.textContent = "------";
+                    return;
+                }
+
+                const time = Math.floor(epoch / period).toString(16).padStart(16, '0');
+                const cryptoKey = new Uint8Array(keyHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                const timeBuffer = new Uint8Array(time.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                const key = await window.crypto.subtle.importKey("raw", cryptoKey, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+                const sig = await window.crypto.subtle.sign("HMAC", key, timeBuffer);
+                const hmac = new Uint8Array(sig);
+                const offset = hmac[hmac.length - 1] & 0xf;
+                const binary = ((hmac[offset] & 0x7f) << 24) | ((hmac[offset + 1] & 0xff) << 16) | ((hmac[offset + 2] & 0xff) << 8) | (hmac[offset + 3] & 0xff);
+                let otp = (binary % Math.pow(10, digits)).toString().padStart(digits, '0');
+                otpEl.textContent = otp;
+            } catch (e) { otpEl.textContent = "------"; }
+        }
+
+        function copyCode() {
+            const otpText = document.getElementById('otp').innerText;
+            if (otpText.includes("-") || otpText === "INVALID" || otpText === "SHORT") return;
+            navigator.clipboard.writeText(otpText);
+            document.getElementById('copy-target').classList.add('copied');
+            setTimeout(() => document.getElementById('copy-target').classList.remove('copied'), 2000);
+        }
+
+        setInterval(updateOTP, 1000);
+        updateOTP();
+    </script>
 </body>
+
 </html>
