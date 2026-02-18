@@ -16,9 +16,8 @@
             --card-bg: rgba(12, 18, 15, 0.45);
             --accent: #3ebd83;
             --accent-soft: rgba(62, 189, 131, 0.08);
-            --text-high: rgba(224, 232, 228, 0.85);
-            /* Subtle Dark */
-            --text-dim: #5c6b63;
+            --text-high: rgba(224, 232, 228, 0.95);
+            --text-dim: rgba(160, 180, 170, 0.75);
             --border: rgba(255, 255, 255, 0.05);
             --input-idle: rgba(255, 255, 255, 0.03);
             --input-focus: rgba(255, 255, 255, 0.08);
@@ -31,9 +30,8 @@
             --card-bg: rgba(255, 255, 255, 0.35);
             --accent: #008a52;
             --accent-soft: rgba(0, 138, 82, 0.05);
-            --text-high: rgba(18, 26, 22, 0.75);
-            /* Subtle Light */
-            --text-dim: #7a8c82;
+            --text-high: rgba(18, 26, 22, 0.95);
+            --text-dim: rgba(60, 80, 70, 0.8);
             --border: rgba(0, 0, 0, 0.04);
             --input-idle: rgba(0, 0, 0, 0.035);
             --input-focus: rgba(0, 0, 0, 0.07);
@@ -119,10 +117,35 @@
             padding: 2.5rem;
             border-radius: 24px;
             border: 1px solid var(--border);
-            width: 100%;
+            width: 90%;
             max-width: 440px;
             position: relative;
             z-index: 10;
+        }
+
+        /* Responsive Mobile Adjustments */
+        @media (max-width: 480px) {
+            .auth-card {
+                padding: 1.5rem;
+                border-radius: 20px;
+            }
+
+            .header {
+                margin-bottom: 1.5rem;
+            }
+
+            .code {
+                font-size: 2.4rem !important;
+            }
+
+            .token-area {
+                min-height: 110px;
+                margin-bottom: 1.5rem;
+            }
+
+            .controls {
+                gap: 1rem;
+            }
         }
 
         .header {
@@ -186,11 +209,9 @@
             z-index: 2;
         }
 
-        /* --- SUBTLE OTP TYPOGRAPHY --- */
         .code {
             font-size: 3.2rem;
             font-weight: 200;
-            /* Ultra-thin and clean */
             letter-spacing: -1px;
             color: var(--text-high);
             display: block;
@@ -228,7 +249,7 @@
             border: 1px solid var(--border);
             border-radius: 10px;
             padding: 12px 16px;
-            color: var(--text-dim);
+            color: var(--text-high);
             font-size: 0.85rem;
             outline: none;
             font-family: 'JetBrains Mono', monospace;
@@ -242,7 +263,6 @@
         input:focus {
             border-color: var(--accent);
             background: var(--input-focus);
-            color: var(--text-high);
         }
 
         .grid {
@@ -287,7 +307,7 @@
             <div class="progress-box" id="progress-bar"></div>
             <span class="copy-toast">COPIED</span>
             <div class="content-layer">
-                <div class="timer-label" id="timer-label">VERIFYING...</div>
+                <div class="timer-label" id="timer-label">AWAITING SECRET</div>
                 <div class="code" id="otp">------</div>
             </div>
         </div>
@@ -296,7 +316,8 @@
             <div class="input-group">
                 <label>Master Secret</label>
                 <div style="position: relative;">
-                    <input type="text" id="secret" value="" oninput="updateOTP()" spellcheck="false">
+                    <input type="text" id="secret" placeholder="Enter Base32 Secret" oninput="updateOTP()"
+                        spellcheck="false">
                     <span
                         style="position:absolute; right:15px; top:50%; transform:translateY(-50%); cursor:pointer; color:var(--accent); opacity:0.4"
                         onclick="toggleSecret()" id="eye-icon">
@@ -351,6 +372,7 @@
             if (!/^[A-Z2-7]*$/.test(clean)) return null;
             for (let i = 0; i < clean.length; i++) {
                 const val = base32chars.indexOf(clean.charAt(i));
+                if (val === -1) return null;
                 bits += val.toString(2).padStart(5, '0');
             }
             for (let i = 0; i + 4 <= bits.length; i += 4) {
@@ -363,7 +385,11 @@
             const secretInput = document.getElementById('secret');
             const digitsInput = document.getElementById('digits');
             const periodInput = document.getElementById('period');
+            const otpEl = document.getElementById('otp');
+            const bar = document.getElementById('progress-bar');
+            const label = document.getElementById('timer-label');
 
+            // Sanitize number inputs
             if (digitsInput.value !== "") {
                 if (parseInt(digitsInput.value) > 8) digitsInput.value = 8;
                 if (parseInt(digitsInput.value) < 6) digitsInput.value = 6;
@@ -373,34 +399,40 @@
                 if (parseInt(periodInput.value) < 10) periodInput.value = 10;
             }
 
-            const secret = secretInput.value;
+            const secret = secretInput.value.trim();
             const digits = parseInt(digitsInput.value) || 6;
             const period = parseInt(periodInput.value) || 30;
 
-            const otpEl = document.getElementById('otp');
-            const bar = document.getElementById('progress-bar');
-            const label = document.getElementById('timer-label');
+            // --- STOP LOGIC: If secret is empty or clearly too short ---
+            if (secret.length === 0) {
+                otpEl.textContent = "------";
+                label.innerText = "AWAITING SECRET";
+                bar.style.width = "100%";
+                return;
+            }
 
+            if (secret.length < 16) {
+                otpEl.textContent = "SHORT";
+                label.innerText = "MIN 16 CHARS";
+                bar.style.width = "100%";
+                return;
+            }
+
+            const keyHex = base32ToHex(secret);
+            if (!keyHex) {
+                otpEl.textContent = "INVALID";
+                label.innerText = "BASE32 ONLY";
+                bar.style.width = "100%";
+                return;
+            }
+
+            // --- START LOGIC: If secret is valid ---
             const epoch = Date.now() / 1000;
             const remaining = Math.ceil(period - (epoch % period));
             bar.style.width = ((remaining / period) * 100) + "%";
             label.innerText = `${remaining}s REMAINING`;
 
             try {
-                if (secret.length < 16 && secret.length > 0) {
-                    otpEl.textContent = "SHORT";
-                    return;
-                }
-                const keyHex = base32ToHex(secret);
-                if (!keyHex && secret.length > 0) {
-                    otpEl.textContent = "INVALID";
-                    return;
-                }
-                if (secret.length === 0) {
-                    otpEl.textContent = "------";
-                    return;
-                }
-
                 const time = Math.floor(epoch / period).toString(16).padStart(16, '0');
                 const cryptoKey = new Uint8Array(keyHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
                 const timeBuffer = new Uint8Array(time.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
@@ -411,12 +443,14 @@
                 const binary = ((hmac[offset] & 0x7f) << 24) | ((hmac[offset + 1] & 0xff) << 16) | ((hmac[offset + 2] & 0xff) << 8) | (hmac[offset + 3] & 0xff);
                 let otp = (binary % Math.pow(10, digits)).toString().padStart(digits, '0');
                 otpEl.textContent = otp;
-            } catch (e) { otpEl.textContent = "------"; }
+            } catch (e) {
+                otpEl.textContent = "ERROR";
+            }
         }
 
         function copyCode() {
             const otpText = document.getElementById('otp').innerText;
-            if (otpText.includes("-") || otpText === "INVALID" || otpText === "SHORT") return;
+            if (otpText.includes("-") || otpText === "INVALID" || otpText === "SHORT" || otpText === "ERROR") return;
             navigator.clipboard.writeText(otpText);
             document.getElementById('copy-target').classList.add('copied');
             setTimeout(() => document.getElementById('copy-target').classList.remove('copied'), 2000);
